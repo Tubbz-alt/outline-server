@@ -90,26 +90,28 @@ function cleanup() {
   # Sets everything up
   export SB_API_PREFIX=TestApiPrefix
   SB_API_URL=https://shadowbox/${SB_API_PREFIX}
+  export TMP_STATE_DIR=$(mktemp -d)
+  echo "{\"hostname\": \"shadowbox\", \"apiPort\":443}" > ${TMP_STATE_DIR}/shadowbox_server_config.json
   docker-compose --project-name=integrationtest up --build -d
-
+  
   # Wait for target to come up.
   wait_for_resource localhost:10080
   declare -r TARGET_IP=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $TARGET_CONTAINER)
-
+  
   # Verify that the client cannot access or even resolve the target
   # Exit code 28 for "Connection timed out".
   docker exec $CLIENT_CONTAINER curl --silent --connect-timeout 1 $TARGET_IP > /dev/null && \
     fail "Client should not have access to target IP" || (($? == 28))
-
+  
   # Exit code 6 for "Could not resolve host".
   docker exec $CLIENT_CONTAINER curl --silent --connect-timeout 1 http://target > /dev/null && \
     fail "Client should not have access to target host" || (($? == 6))
-
+  
   # Wait for shadowbox to come up.
   wait_for_resource https://localhost:20443/access-keys
   # Verify that the shadowbox can access the target
   docker exec $SHADOWBOX_CONTAINER wget --spider http://target
-
+  
   # Create new shadowbox user.
   # TODO(bemasc): Verify that the server is using the right certificate
   declare -r NEW_USER_JSON=$(client_curl --insecure -X POST ${SB_API_URL}/access-keys)

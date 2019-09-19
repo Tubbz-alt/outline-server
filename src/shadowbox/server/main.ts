@@ -65,7 +65,6 @@ async function main() {
 
   prometheus.collectDefaultMetrics({register: prometheus.register});
 
-  const proxyHostname = process.env.SB_PUBLIC_IP;
   // Default to production metrics, as some old Docker images may not have
   // SB_METRICS_URL properly set.
   const metricsCollectorUrl = process.env.SB_METRICS_URL || 'https://metrics-prod.uproxy.org';
@@ -73,26 +72,27 @@ async function main() {
     logging.warn('process.env.SB_METRICS_URL not set, using default');
   }
 
-  if (!proxyHostname) {
-    logging.error('Need to specify SB_PUBLIC_IP for invite links');
-    process.exit(1);
-  }
+  const serverConfigAddress = getPersistentFilename('shadowbox_server_config.json');
+  const serverConfig = server_config.readServerConfig(serverConfigAddress);
+  logging.debug(`Server Config: ${JSON.stringify(serverConfig)}`);
 
-  logging.debug(`=== Config ===`);
-  logging.debug(`SB_PUBLIC_IP: ${proxyHostname}`);
-  logging.debug(`SB_METRICS_URL: ${metricsCollectorUrl}`);
-  logging.debug(`==============`);
-
-  const DEFAULT_PORT = 8081;
-  const apiPortNumber = Number(process.env.SB_API_PORT || DEFAULT_PORT);
+  const apiPortNumber = serverConfig.data().apiPort;
   if (isNaN(apiPortNumber)) {
-    logging.error(`Invalid SB_API_PORT: ${process.env.SB_API_PORT}`);
+    logging.error(`Invalid API port: ${serverConfig.data().apiPort}.  Try editing the apiPort field in ${serverConfigAddress}.`);
     process.exit(1);
   }
   portProvider.addReservedPort(apiPortNumber);
 
-  const serverConfig =
-      server_config.readServerConfig(getPersistentFilename('shadowbox_server_config.json'));
+  const proxyHostname = serverConfig.data().hostname;
+  if (!proxyHostname) {
+    logging.error(`The proxy hostname needs to be specified in the "hostname" field in ${serverConfigAddress}.`);
+    process.exit(1);
+  }
+
+  logging.debug(`=== Config ===`);
+  logging.debug(`Hostname: ${proxyHostname}`);
+  logging.debug(`SB_METRICS_URL: ${metricsCollectorUrl}`);
+  logging.debug(`==============`);
 
   logging.info('Starting...');
 
