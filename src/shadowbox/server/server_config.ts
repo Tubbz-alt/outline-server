@@ -31,9 +31,9 @@ export interface ServerConfigJson {
   portForNewAccessKeys?: number;
   // Which staged rollouts we should force enabled or disabled.
   rollouts?: RolloutConfigJson[];
-  // The hostname for the proxy server
+  // The hostname for the proxy server.
   hostname?: string;
-  // The port for the management API
+  // The port for the management API.
   apiPort?: number;
 }
 
