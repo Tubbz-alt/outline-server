@@ -78,7 +78,6 @@ Delete dangling images:
 docker rmi $(docker images -f dangling=true -q)
 ```
 
-
 ## Access Keys Management API
 
 In order to utilize the Management API, you'll need to know the apiUrl for your Outline server.
