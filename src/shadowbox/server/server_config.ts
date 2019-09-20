@@ -33,8 +33,6 @@ export interface ServerConfigJson {
   rollouts?: RolloutConfigJson[];
   // The hostname for the proxy server.
   hostname?: string;
-  // The port for the management API.
-  apiPort?: number;
 }
 
 // Serialized format for rollouts.
@@ -48,13 +46,11 @@ export interface RolloutConfigJson {
 }
 
 export function readServerConfig(filename: string): json_config.JsonConfig<ServerConfigJson> {
-  const DEFAULT_PORT = 8081;
   try {
     const config = json_config.loadFileConfig<ServerConfigJson>(filename);
     config.data().serverId = config.data().serverId || uuidv4();
     config.data().metricsEnabled = config.data().metricsEnabled || false;
     config.data().createdTimestampMs = config.data().createdTimestampMs || Date.now();
-    config.data().apiPort = config.data().apiPort || Number(process.env.SB_API_PORT) || DEFAULT_PORT;
     config.data().hostname = config.data().hostname || process.env.SB_PUBLIC_HOSTNAME;
     config.write();
     return config;

@@ -19,19 +19,19 @@ import * as process from 'process';
 import * as prometheus from 'prom-client';
 import * as restify from 'restify';
 
-import {RealClock} from '../infrastructure/clock';
-import {PortProvider} from '../infrastructure/get_port';
+import { RealClock } from '../infrastructure/clock';
+import { PortProvider } from '../infrastructure/get_port';
 import * as json_config from '../infrastructure/json_config';
 import * as logging from '../infrastructure/logging';
-import {PrometheusClient, runPrometheusScraper} from '../infrastructure/prometheus_scraper';
-import {AccessKeyId} from '../model/access_key';
+import { PrometheusClient, runPrometheusScraper } from '../infrastructure/prometheus_scraper';
+import { AccessKeyId } from '../model/access_key';
 
-import {PrometheusManagerMetrics} from './manager_metrics';
-import {bindService, ShadowsocksManagerService} from './manager_service';
-import {OutlineShadowsocksServer} from './outline_shadowsocks_server';
-import {AccessKeyConfigJson, ServerAccessKeyRepository} from './server_access_key';
+import { PrometheusManagerMetrics } from './manager_metrics';
+import { bindService, ShadowsocksManagerService } from './manager_service';
+import { OutlineShadowsocksServer } from './outline_shadowsocks_server';
+import { AccessKeyConfigJson, ServerAccessKeyRepository } from './server_access_key';
 import * as server_config from './server_config';
-import {OutlineSharedMetricsPublisher, PrometheusUsageMetrics, RestMetricsCollectorClient, SharedMetricsPublisher} from './shared_metrics';
+import { OutlineSharedMetricsPublisher, PrometheusUsageMetrics, RestMetricsCollectorClient, SharedMetricsPublisher } from './shared_metrics';
 
 const DEFAULT_STATE_DIR = '/root/shadowbox/persisted-state';
 const MMDB_LOCATION = '/var/lib/libmaxminddb/GeoLite2-Country.mmdb';
@@ -45,12 +45,12 @@ async function exportPrometheusMetrics(registry: prometheus.Registry, port): Pro
     server.on('listening', () => {
       resolve(server);
     });
-    server.listen({port, host: 'localhost', exclusive: true});
+    server.listen({ port, host: 'localhost', exclusive: true });
   });
 }
 
 function reserveExistingAccessKeyPorts(
-    keyConfig: json_config.JsonConfig<AccessKeyConfigJson>, portProvider: PortProvider) {
+  keyConfig: json_config.JsonConfig<AccessKeyConfigJson>, portProvider: PortProvider) {
   const accessKeys = keyConfig.data().accessKeys || [];
   const dedupedPorts = new Set(accessKeys.map(ak => ak.port));
   dedupedPorts.forEach(p => portProvider.addReservedPort(p));
@@ -60,10 +60,10 @@ async function main() {
   const verbose = process.env.LOG_LEVEL === 'debug';
   const portProvider = new PortProvider();
   const accessKeyConfig = json_config.loadFileConfig<AccessKeyConfigJson>(
-      getPersistentFilename('shadowbox_config.json'));
+    getPersistentFilename('shadowbox_config.json'));
   reserveExistingAccessKeyPorts(accessKeyConfig, portProvider);
 
-  prometheus.collectDefaultMetrics({register: prometheus.register});
+  prometheus.collectDefaultMetrics({ register: prometheus.register });
 
   // Default to production metrics, as some old Docker images may not have
   // SB_METRICS_URL properly set.
@@ -76,13 +76,6 @@ async function main() {
   const serverConfig = server_config.readServerConfig(serverConfigAddress);
   logging.debug(`Server Config: ${JSON.stringify(serverConfig)}`);
 
-  const apiPortNumber = serverConfig.data().apiPort;
-  if (isNaN(apiPortNumber)) {
-    logging.error(`Invalid API port: ${serverConfig.data().apiPort}.  Try editing the apiPort field in ${serverConfigAddress}.`);
-    process.exit(1);
-  }
-  portProvider.addReservedPort(apiPortNumber);
-
   const proxyHostname = serverConfig.data().hostname;
   if (!proxyHostname) {
     logging.error(`The proxy hostname needs to be specified in the "hostname" field in ${serverConfigAddress}.`);
@@ -93,6 +86,14 @@ async function main() {
   logging.debug(`Hostname: ${proxyHostname}`);
   logging.debug(`SB_METRICS_URL: ${metricsCollectorUrl}`);
   logging.debug(`==============`);
+
+  const DEFAULT_PORT = 8081;
+  const apiPortNumber = Number(process.env.SB_API_PORT) || DEFAULT_PORT;
+  if (isNaN(apiPortNumber)) {
+    logging.error(`Invalid SB_API_PORT: ${process.env.SB_API_PORT}`);
+    process.exit(1);
+  }
+  portProvider.addReservedPort(apiPortNumber);
 
   logging.info('Starting...');
 
@@ -114,26 +115,26 @@ async function main() {
       scrape_interval: '15s',
     },
     scrape_configs: [
-      {job_name: 'prometheus', static_configs: [{targets: [prometheusLocation]}]},
-      {job_name: 'outline-server-main', static_configs: [{targets: [nodeMetricsLocation]}]},
+      { job_name: 'prometheus', static_configs: [{ targets: [prometheusLocation] }] },
+      { job_name: 'outline-server-main', static_configs: [{ targets: [nodeMetricsLocation] }] },
     ]
   };
 
   const ssMetricsLocation = `localhost:${ssMetricsPort}`;
   logging.info(`outline-ss-server metrics is at ${ssMetricsLocation}`);
   prometheusConfigJson.scrape_configs.push(
-      {job_name: 'outline-server-ss', static_configs: [{targets: [ssMetricsLocation]}]});
+    { job_name: 'outline-server-ss', static_configs: [{ targets: [ssMetricsLocation] }] });
   const shadowsocksServer =
-      new OutlineShadowsocksServer(
-          getPersistentFilename('outline-ss-server/config.yml'), verbose, ssMetricsLocation)
-          .enableCountryMetrics(MMDB_LOCATION);
+    new OutlineShadowsocksServer(
+      getPersistentFilename('outline-ss-server/config.yml'), verbose, ssMetricsLocation)
+      .enableCountryMetrics(MMDB_LOCATION);
   runPrometheusScraper(
-      [
-        '--storage.tsdb.retention', '31d', '--storage.tsdb.path',
-        getPersistentFilename('prometheus/data'), '--web.listen-address', prometheusLocation,
-        '--log.level', verbose ? 'debug' : 'info'
-      ],
-      getPersistentFilename('prometheus/config.yml'), prometheusConfigJson);
+    [
+      '--storage.tsdb.retention', '31d', '--storage.tsdb.path',
+      getPersistentFilename('prometheus/data'), '--web.listen-address', prometheusLocation,
+      '--log.level', verbose ? 'debug' : 'info'
+    ],
+    getPersistentFilename('prometheus/config.yml'), prometheusConfigJson);
 
   const prometheusClient = new PrometheusClient(`http://${prometheusLocation}`);
   if (!serverConfig.data().portForNewAccessKeys) {
@@ -141,8 +142,8 @@ async function main() {
     serverConfig.write();
   }
   const accessKeyRepository = new ServerAccessKeyRepository(
-      serverConfig.data().portForNewAccessKeys, proxyHostname, accessKeyConfig, shadowsocksServer,
-      prometheusClient);
+    serverConfig.data().portForNewAccessKeys, proxyHostname, accessKeyConfig, shadowsocksServer,
+    prometheusClient);
 
   const metricsReader = new PrometheusUsageMetrics(prometheusClient);
   const toMetricsId = (id: AccessKeyId) => {
@@ -151,10 +152,10 @@ async function main() {
   const managerMetrics = new PrometheusManagerMetrics(prometheusClient);
   const metricsCollector = new RestMetricsCollectorClient(metricsCollectorUrl);
   const metricsPublisher: SharedMetricsPublisher = new OutlineSharedMetricsPublisher(
-      new RealClock(), serverConfig, metricsReader, toMetricsId, metricsCollector);
+    new RealClock(), serverConfig, metricsReader, toMetricsId, metricsCollector);
   const managerService = new ShadowsocksManagerService(
-      process.env.SB_DEFAULT_SERVER_NAME || 'Outline Server', serverConfig, accessKeyRepository,
-      managerMetrics, metricsPublisher);
+    process.env.SB_DEFAULT_SERVER_NAME || 'Outline Server', serverConfig, accessKeyRepository,
+    managerMetrics, metricsPublisher);
 
   const certificateFilename = process.env.SB_CERTIFICATE_FILE;
   const privateKeyFilename = process.env.SB_PRIVATE_KEY_FILE;
